@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Candy Tier & Ordinal Ranker</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #121214; color: #e1e1e6; margin: 0; padding: 20px; }
+h1 { text-align: center; color: #ff9d00; margin-bottom: 10px; }
+.controls { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+button { background: #27272a; color: #fff; border: 1px solid #3f3f46; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 600; transition: all 0.2s; }
+button:hover { background: #3f3f46; }
+button.active { background: #ff9d00; color: #000; border-color: #ff9d00; }
+.share-btn { background: #22c55e; color: #000; border: none; }
+.share-btn:hover { background: #16a34a; }
+.view-container { max-width: 1100px; margin: 0 auto; }
+.tier-row { display: flex; border: 1px solid #27272a; margin-bottom: 8px; border-radius: 6px; overflow: hidden; min-height: 80px; }
+.tier-label { width: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; color: #000; padding: 10px; flex-shrink: 0; }
+.tier-items { flex-grow: 1; background: #18181b; padding: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 60px; }
+.tier-S .tier-label { background: #ff7f7f; }
+.tier-A .tier-label { background: #ffbf7f; }
+.tier-B .tier-label { background: #ffdf7f; }
+.tier-C .tier-label { background: #ffff7f; }
+.tier-D .tier-label { background: #bfff7f; }
+.tier-F .tier-label { background: #7fff7f; }
+.unassigned-container { border: 2px dashed #3f3f46; border-radius: 6px; padding: 15px; background: #18181b; margin-top: 20px; }
+.unassigned-title { font-weight: bold; margin-bottom: 10px; color: #a1a1aa; }
+.unassigned-items { display: flex; flex-wrap: wrap; gap: 8px; min-height: 60px; }
+.candy-chip { background: #27272a; color: #f4f4f5; padding: 8px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: grab; user-select: none; border: 1px solid #3f3f46; display: inline-flex; align-items: center; gap: 6px; }
+.candy-chip:hover { border-color: #ff9d00; background: #3f3f46; }
+.ordinal-list { display: flex; flex-direction: column; gap: 8px; }
+.ordinal-item { display: flex; align-items: center; background: #18181b; border: 1px solid #27272a; padding: 8px 15px; border-radius: 6px; gap: 15px; }
+.ordinal-rank { font-weight: bold; color: #ff9d00; width: 40px; font-size: 18px; }
+.rank-input { width: 50px; background: #27272a; border: 1px solid #3f3f46; color: #fff; padding: 4px 8px; border-radius: 4px; text-align: center; font-size: 14px; }
+.toast { position: fixed; bottom: 20px; right: 20px; background: #22c55e; color: #000; padding: 12px 24px; border-radius: 6px; font-weight: bold; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+.score-badge { font-size: 11px; opacity: 0.8; font-weight: normal; }
+</style>
+</head>
+<body>
+<h1>Candy Tier & Ordinal Ranker</h1>
+<div class="controls">
+<button id="btn-cardinal" class="active" onclick="switchView('cardinal')">Cardinal Tier List</button>
+<button id="btn-ordinal" onclick="switchView('ordinal')">Ordinal Ranked List</button>
+<button class="share-btn" onclick="shareLink()">Share via Link</button>
+</div>
+<div class="view-container">
+<div id="cardinal-view">
+<div class="tier-row tier-S" ondragover="allowDrop(event)" ondrop="drop(event, 'S')"><div class="tier-label">S Tier<span class="score-badge">Score: 5</span></div><div class="tier-items" id="tier-S"></div></div>
+<div class="tier-row tier-A" ondragover="allowDrop(event)" ondrop="drop(event, 'A')"><div class="tier-label">A Tier<span class="score-badge">Score: 4</span></div><div class="tier-items" id="tier-A"></div></div>
+<div class="tier-row tier-B" ondragover="allowDrop(event)" ondrop="drop(event, 'B')"><div class="tier-label">B Tier<span class="score-badge">Score: 3</span></div><div class="tier-items" id="tier-B"></div></div>
+<div class="tier-row tier-C" ondragover="allowDrop(event)" ondrop="drop(event, 'C')"><div class="tier-label">C Tier<span class="score-badge">Score: 2</span></div><div class="tier-items" id="tier-C"></div></div>
+<div class="tier-row tier-D" ondragover="allowDrop(event)" ondrop="drop(event, 'D')"><div class="tier-label">D Tier<span class="score-badge">Score: 1</span></div><div class="tier-items" id="tier-D"></div></div>
+<div class="tier-row tier-F" ondragover="allowDrop(event)" ondrop="drop(event, 'F')"><div class="tier-label">F Tier<span class="score-badge">Score: 0</span></div><div class="tier-items" id="tier-F"></div></div>
+<div class="unassigned-container" ondragover="allowDrop(event)" ondrop="drop(event, 'U')"><div class="unassigned-title">Unassigned Candies</div><div class="unassigned-items" id="tier-U"></div></div>
+</div>
+<div id="ordinal-view" style="display:none;"><div class="ordinal-list" id="ordinal-list"></div></div>
+</div>
+<div id="toast" class="toast">Link copied to clipboard!</div>
+<script>
+const candyList = [
+"Snickers", "Twix", "Kit Kat", "Milky Way", "3 Musketeers", "Butterfinger", "Baby Ruth", "Crunch", "100 Grand", "Whatchamacallit", "Almond Joy", "Mounds", "PayDay", "Heath", "Skor", "Charleston Chew", "5th Avenue", "Zero Bar", "Clark Bar", "Hershey's Milk Chocolate", "Hershey's w/ Almonds", "Hershey's Special Dark", "Hershey's Kisses", "Mr. Goodbar", "Krackel", "M&M's", "Peanut M&M's", "Whoppers", "Milk Duds", "Rolo", "Junior Mints", "York Peppermint Pattie", "Andes Mints", "Raisinets", "Goobers", "Sno-Caps", "Sixlets", "Skittles", "Sour Skittles", "Starburst", "Sour Patch Kids", "Sour Patch Watermelon", "Swedish Fish", "Haribo Goldbears", "Trolli Sour Brite Crawlers", "Peach Rings", "Life Savers Gummies", "Airheads", "Airheads Xtremes", "Laffy Taffy", "Nerds", "Nerds Rope", "SweeTarts", "Mike and Ike", "Hot Tamales", "Dots", "Jujyfruits", "Twizzlers", "Red Vines", "Sour Punch Straws", "Now and Later", "Gushers", "Fruit by the Foot", "Fruit Roll-Ups", "Jolly Rancher", "Life Savers", "Werther's Original", "Strawberry Bon Bons", "Tootsie Roll", "Tootsie Fruit Chews", "Tootsie Pop", "Blow Pop", "Dum Dums", "Ring Pop", "Push Pop", "Baby Bottle Pop", "Fun Dip", "Pixy Stix", "Pop Rocks", "Smarties", "Bottle Caps", "Gobstopper", "Runts", "Spree", "Lemonheads", "Warheads", "Atomic FireBall", "PEZ", "Candy Corn", "Peeps", "Good & Plenty", "Circus Peanuts", "Necco Wafers", "Bit-O-Honey", "Cow Tales", "Sugar Babies", "Hubba Bubba", "Big League Chew", "Dubble Bubble", "Mentos", "Tic Tac",
+"Hershey's Cookies 'n' Creme",
+"Nerds Gummy Clusters", "Ferrero Rocher", "Kinder Bueno", "Toblerone", "Hi-Chew",
+"Reese's Peanut Butter Cups", "Reese's Pieces", "Reese's Fast Break", "Reese's Take 5", "Reese's Sticks", "Reese's Nutrageous", "Reese's Outrageous!", "Reese's Big Cup", "Reese's Big Cup Pretzels", "Reese's Big Cup Pieces", "Reese's Big Cup Caramel", "Reese's Big Cup Potato Chips", "Reese's Big Cup Lava", "Reese's Big Cup Puffs", "Reese's Big Cup Pretzels/Pieces/Caramel/Potato Chips/Lava/Puffs", "Reese's Miniatures", "Reese's Minis", "Reese's Thins Milk", "Reese's Thins Dark", "Reese's Thins White", "Reese's Thins Milk/Dark/White", "Reese's White Creme & Dark Chocolate Cups", "Reese's Ultimate PB Lovers", "Reese's Chocolate Lovers", "Reese's x Oreo Cups", "Reese's Pumpkins", "Reese's Eggs", "Reese's Trees", "Reese's Hearts", "Reese's Pumpkins/Eggs/Trees/Hearts", "Reese's Crispy Crunchy Bar", "Reese's XL PB Bar", "Reese's Dipped Pretzels", "Reese's Dipped Animal Crackers", "Reese's Popped Snack Mix", "Reese's Plant-Based Cups", "Reese's Zero Sugar Cups", "Reese's Mallow-Top Cups", "Reese's Crunchers"
+];
+let tierState = {};
+let ordinalState = [...candyList];
+candyList.forEach(c => tierState[c] = 'U');
+let currentView = 'cardinal';
+let draggedIdx = null;
+
+function init() { loadHash(); renderCardinal(); renderOrdinal(); }
+
+function switchView(view) {
+  currentView = view;
+  document.getElementById('btn-cardinal').classList.toggle('active', view === 'cardinal');
+  document.getElementById('btn-ordinal').classList.toggle('active', view === 'ordinal');
+  document.getElementById('cardinal-view').style.display = view === 'cardinal' ? 'block' : 'none';
+  document.getElementById('ordinal-view').style.display = view === 'ordinal' ? 'block' : 'none';
+}
+
+function renderCardinal() {
+  ['S','A','B','C','D','F','U'].forEach(t => { document.getElementById('tier-' + t).innerHTML = ''; });
+  candyList.forEach(c => {
+    const t = tierState[c] || 'U';
+    const chip = document.createElement('div');
+    chip.className = 'candy-chip';
+    chip.draggable = true;
+    chip.innerText = c;
+    chip.ondragstart = (e) => e.dataTransfer.setData('text/plain', c);
+    chip.onclick = () => cycleTier(c);
+    document.getElementById('tier-' + t).appendChild(chip);
+  });
+}
+
+function cycleTier(c) {
+  const tiers = ['U', 'S', 'A', 'B', 'C', 'D', 'F'];
+  let idx = tiers.indexOf(tierState[c]);
+  tierState[c] = tiers[(idx + 1) % tiers.length];
+  renderCardinal(); saveHash();
+}
+
+function allowDrop(e) { e.preventDefault(); }
+function drop(e, t) {
+  e.preventDefault();
+  const c = e.dataTransfer.getData('text/plain');
+  if (c && tierState[c] !== undefined) { tierState[c] = t; renderCardinal(); saveHash(); }
+}
+
+function renderOrdinal() {
+  const container = document.getElementById('ordinal-list');
+  container.innerHTML = '';
+  ordinalState.forEach((c, idx) => {
+    const item = document.createElement('div');
+    item.className = 'ordinal-item';
+    item.draggable = true;
+    item.ondragstart = () => { draggedIdx = idx; };
+    item.ondragover = (e) => e.preventDefault();
+    item.ondrop = (e) => {
+      e.preventDefault();
+      if (draggedIdx !== null && draggedIdx !== idx) {
+        const moved = ordinalState.splice(draggedIdx, 1)[0];
+        ordinalState.splice(idx, 0, moved);
+        renderOrdinal(); saveHash();
+      }
+    };
+    item.innerHTML = `<div class="ordinal-rank">#${idx + 1}</div><input type="number" class="rank-input" value="${idx + 1}" min="1" max="${ordinalState.length}" onchange="changeRank(${idx}, this.value)"><div class="candy-chip">${c}</div>`;
+    container.appendChild(item);
+  });
+}
+
+function changeRank(fromIdx, newRankVal) {
+  let toIdx = parseInt(newRankVal, 10) - 1;
+  if (isNaN(toIdx)) return;
+  toIdx = Math.max(0, Math.min(ordinalState.length - 1, toIdx));
+  const moved = ordinalState.splice(fromIdx, 1)[0];
+  ordinalState.splice(toIdx, 0, moved);
+  renderOrdinal(); saveHash();
+}
+
+function saveHash() {
+  const data = { t: tierState, o: ordinalState, v: currentView };
+  window.location.hash = 's=' + encodeURIComponent(btoa(JSON.stringify(data)));
+}
+
+function loadHash() {
+  if (window.location.hash.startsWith('#s=')) {
+    try {
+      const raw = window.location.hash.substring(3);
+      const data = JSON.parse(atob(decodeURIComponent(raw)));
+      if (data.t) tierState = data.t;
+      if (data.o) ordinalState = data.o;
+      if (data.v) switchView(data.v);
+    } catch(e) {}
+  }
+}
+
+function shareLink() {
+  saveHash();
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    const toast = document.getElementById('toast');
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 3000);
+  });
+}
+
+window.onload = init;
+</script>
+</body>
+</html>
